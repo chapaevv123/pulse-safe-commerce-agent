@@ -19,8 +19,9 @@ from pulse_safe_commerce_agent.store import Store
 
 
 class FakePayPal:
-    def __init__(self, fail=False, mismatch=False): self.fail, self.mismatch, self.captures = fail, mismatch, 0
+    def __init__(self, fail=False, mismatch=False): self.fail, self.mismatch, self.captures, self.urls = fail, mismatch, 0, None
     async def create_order(self, amount, currency, request_id, return_url, cancel_url):
+        self.urls = (return_url, cancel_url)
         return {"id": "ORDER-1", "status": "PAYER_ACTION_REQUIRED", "links": [{"rel": "payer-action", "href": "https://www.sandbox.paypal.com/checkoutnow?token=ORDER-1"}]}
     async def capture(self, order_id, request_id):
         self.captures += 1
@@ -83,6 +84,13 @@ def test_receipt_determinism():
     e=engine(); rid=asyncio.run(approved(e)); receipt=asyncio.run(e.execute(rid))["receipt"]; assert receipt["receipt_id"].startswith("receipt_")
 def test_create_order_idempotent():
     pp=FakePayPal(); e=engine(pp); rid=asyncio.run(approved(e)); first=asyncio.run(e.create_order(rid)); assert first["paypal_order_id"]=="ORDER-1"
+def test_local_paypal_redirect_urls():
+    pp=FakePayPal(); e=engine(pp); rid=asyncio.run(approved(e)); assert pp.urls == (f"http://test/api/payments/{rid}/paypal-return", f"http://test/api/payments/{rid}/paypal-cancel")
+def test_default_app_base_url_is_localhost(): assert Settings().app_base_url == "http://localhost:8000"
+def test_render_paypal_redirect_urls():
+    pp=FakePayPal(); e=CommerceEngine(Store(":memory:"), pp, FixtureInterpreter(), Policy(), "https://pulse-safe-commerce-agent.onrender.com/"); rid=asyncio.run(approved(e)); assert pp.urls == (f"https://pulse-safe-commerce-agent.onrender.com/api/payments/{rid}/paypal-return", f"https://pulse-safe-commerce-agent.onrender.com/api/payments/{rid}/paypal-cancel")
+def test_cancel_route_does_not_capture():
+    pp=FakePayPal(); c=TestClient(create_app(Settings(database_path=":memory:"), Store(":memory:"), pp, FixtureInterpreter())); proposed=c.post("/api/intents",json={"text":"Pay $24.50 for the research report."}).json(); result=c.get(f"/api/payments/{proposed['request_id']}/paypal-cancel").json(); assert result["paypal_cancelled"] is True and pp.captures==0
 def test_approve_link(): assert approve_link({"links":[{"rel":"approve","href":"x"}]})=="x"
 def test_live_base_rejected():
     with pytest.raises(ValueError): Settings(paypal_base_url="https://api-m.paypal.com").validate()

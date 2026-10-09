@@ -60,6 +60,12 @@ Copy-Item .env.example .env
 
 Set the sandbox credentials in `.env` locally. Never commit it.
 
+`APP_BASE_URL` controls the PayPal buyer redirect origin. It defaults to
+`http://localhost:8000` for local development. A public deployment must set it
+to its HTTPS origin; Render uses `https://pulse-safe-commerce-agent.onrender.com`.
+The application derives both `/api/payments/{request_id}/paypal-return` and
+`/api/payments/{request_id}/paypal-cancel` from this value.
+
 ```powershell
 uvicorn pulse_safe_commerce_agent.app:app --reload
 pytest

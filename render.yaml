@@ -12,7 +12,7 @@ services:
       - key: PAYPAL_BASE_URL
         value: https://api-m.sandbox.paypal.com
       - key: APP_BASE_URL
-        sync: false
+        value: https://pulse-safe-commerce-agent.onrender.com
       - key: SESSION_SECRET
         generateValue: true
       - key: AI_PROVIDER

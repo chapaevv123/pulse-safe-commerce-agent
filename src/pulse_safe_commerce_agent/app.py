@@ -98,6 +98,15 @@ def create_app(settings: Settings | None = None, store: Store | None = None, pay
         result = await app.state.engine.execute(request_id)
         return JSONResponse(result)
 
+    @app.get("/api/payments/{request_id}/paypal-cancel")
+    async def paypal_cancel(request_id: str):
+        try:
+            result = app.state.engine.view(request_id)
+        except KeyError:
+            raise HTTPException(404, "Not found")
+        return JSONResponse({"request_id": request_id, "status": result["status"],
+                             "paypal_cancelled": True, "message": "Sandbox checkout was cancelled; no capture was attempted."})
+
     @app.post("/api/payments/{request_id}/execute")
     async def execute(request_id: str, body: ExecuteBody):
         override = {"amount": body.amount_override} if body.amount_override else None

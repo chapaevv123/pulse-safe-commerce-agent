@@ -64,7 +64,7 @@ class CommerceEngine:
         intent = json.loads(row["intent_json"])
         order = await self.paypal.create_order(intent["amount"], intent["currency"], request_id,
                                                 f"{self.app_base_url}/api/payments/{request_id}/paypal-return",
-                                                f"{self.app_base_url}/?cancelled=1")
+                                                f"{self.app_base_url}/api/payments/{request_id}/paypal-cancel")
         at = now()
         self.store.update(request_id, status="PAYPAL_ORDER_CREATED", paypal_order_id=order["id"], paypal_status=order["status"], updated_at=at)
         self.store.trace(request_id, "PAYPAL_ORDER", "COMPLETE", order["id"], "Sandbox order created", "PAYPAL_ORDER_CREATED", at)
