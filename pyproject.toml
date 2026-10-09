@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pulse-safe-commerce-agent"
+version = "0.1.0"
+description = "A deterministic safety boundary between AI commerce intent and PayPal Sandbox execution."
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115,<1", "httpx>=0.27,<1", "jinja2>=3.1,<4", "uvicorn>=0.30,<1", "python-dotenv>=1,<2"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pulse_safe_commerce_agent = ["templates/*.html", "static/*.css", "static/*.js"]

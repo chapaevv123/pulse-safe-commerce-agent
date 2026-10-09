@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+*.pem
+*secret*
+*credentials*
+*.db
+.paypal_live_validation_state.json
+__pycache__/
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/
