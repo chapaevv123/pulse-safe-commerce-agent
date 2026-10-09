@@ -66,6 +66,12 @@ to its HTTPS origin; Render uses `https://pulse-safe-commerce-agent.onrender.com
 The application derives both `/api/payments/{request_id}/paypal-return` and
 `/api/payments/{request_id}/paypal-cancel` from this value.
 
+After PayPal buyer approval, the server callback captures and reconciles the
+existing order, then redirects to the main UI with the request ID. The page
+restores the persisted payment, receipt, reconciliation, and agent trace rather
+than exposing a raw PayPal response. Cancellation and safe failure states use
+the same UI restoration path and never attempt an extra capture.
+
 ```powershell
 uvicorn pulse_safe_commerce_agent.app:app --reload
 pytest

@@ -43,6 +43,8 @@ class CommerceEngine:
         row["intent"] = json.loads(row.pop("intent_json"))
         row["receipt"] = json.loads(row["receipt_json"]) if row.get("receipt_json") else None
         row.pop("receipt_json", None)
+        row["reconciliation"] = json.loads(row["reconciliation_json"]) if row.get("reconciliation_json") else None
+        row.pop("reconciliation_json", None)
         row["trace"] = self.store.traces(request_id)
         return row
 
@@ -124,4 +126,7 @@ class CommerceEngine:
         intent = json.loads(row["intent_json"])
         remote_amount = remote["purchase_units"][0]["amount"]
         match = remote_amount["value"] == intent["amount"] and remote_amount["currency_code"] == intent["currency"] and remote["id"] == row["paypal_order_id"]
-        return {"result": "MATCH" if match else "MISMATCH", "local_status": row["status"], "paypal_status": remote["status"], "amount": remote_amount}
+        result = {"result": "MATCH" if match else "MISMATCH", "local_status": row["status"], "paypal_status": remote["status"], "amount": remote_amount}
+        self.store.update(request_id, reconciliation_json=json.dumps(result, sort_keys=True), updated_at=now())
+        self.store.trace(request_id, "RECONCILE", "COMPLETE", row["paypal_order_id"], "Local and PayPal state compared", result["result"], now())
+        return result

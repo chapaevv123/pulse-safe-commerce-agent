@@ -4,13 +4,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from .config import Settings
-from .engine import CommerceEngine
+from .engine import CommerceEngine, now
 from .intent import FixtureInterpreter, OpenAICompatibleInterpreter
 from .models import Policy
 from .paypal import PayPalClient
@@ -95,17 +95,25 @@ def create_app(settings: Settings | None = None, store: Store | None = None, pay
 
     @app.get("/api/payments/{request_id}/paypal-return")
     async def paypal_return(request_id: str):
-        result = await app.state.engine.execute(request_id)
-        return JSONResponse(result)
+        try:
+            result = await app.state.engine.execute(request_id)
+            if result.get("status") == "SUCCEEDED":
+                await app.state.engine.reconcile(request_id)
+                return RedirectResponse(f"/?request_id={request_id}&payment=success", status_code=303)
+            return RedirectResponse(f"/?request_id={request_id}&payment=error", status_code=303)
+        except Exception as exc:
+            if app.state.store.get(request_id):
+                code = str(getattr(exc, "code", "PAYPAL_RETURN_FAILED"))[:80]
+                app.state.store.update(request_id, status="FAILED", error_code=code, updated_at=now())
+            return RedirectResponse(f"/?request_id={request_id}&payment=error", status_code=303)
 
     @app.get("/api/payments/{request_id}/paypal-cancel")
     async def paypal_cancel(request_id: str):
         try:
-            result = app.state.engine.view(request_id)
+            app.state.engine.view(request_id)
         except KeyError:
             raise HTTPException(404, "Not found")
-        return JSONResponse({"request_id": request_id, "status": result["status"],
-                             "paypal_cancelled": True, "message": "Sandbox checkout was cancelled; no capture was attempted."})
+        return RedirectResponse(f"/?request_id={request_id}&payment=cancelled", status_code=303)
 
     @app.post("/api/payments/{request_id}/execute")
     async def execute(request_id: str, body: ExecuteBody):

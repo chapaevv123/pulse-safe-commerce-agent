@@ -90,7 +90,21 @@ def test_default_app_base_url_is_localhost(): assert Settings().app_base_url == 
 def test_render_paypal_redirect_urls():
     pp=FakePayPal(); e=CommerceEngine(Store(":memory:"), pp, FixtureInterpreter(), Policy(), "https://pulse-safe-commerce-agent.onrender.com/"); rid=asyncio.run(approved(e)); assert pp.urls == (f"https://pulse-safe-commerce-agent.onrender.com/api/payments/{rid}/paypal-return", f"https://pulse-safe-commerce-agent.onrender.com/api/payments/{rid}/paypal-cancel")
 def test_cancel_route_does_not_capture():
-    pp=FakePayPal(); c=TestClient(create_app(Settings(database_path=":memory:"), Store(":memory:"), pp, FixtureInterpreter())); proposed=c.post("/api/intents",json={"text":"Pay $24.50 for the research report."}).json(); result=c.get(f"/api/payments/{proposed['request_id']}/paypal-cancel").json(); assert result["paypal_cancelled"] is True and pp.captures==0
+    pp=FakePayPal(); c=TestClient(create_app(Settings(database_path=":memory:"), Store(":memory:"), pp, FixtureInterpreter())); proposed=c.post("/api/intents",json={"text":"Pay $24.50 for the research report."}).json(); response=c.get(f"/api/payments/{proposed['request_id']}/paypal-cancel",follow_redirects=False); assert response.status_code==303 and response.headers["location"]==f"/?request_id={proposed['request_id']}&payment=cancelled" and pp.captures==0
+def return_client(paypal=None):
+    pp=paypal or FakePayPal(); store=Store(":memory:"); app=create_app(Settings(database_path=":memory:"),store,pp,FixtureInterpreter()); c=TestClient(app); proposed=c.post("/api/intents",json={"text":"Pay $24.50 for the research report."}).json(); rid=proposed["request_id"]; c.post(f"/api/payments/{rid}/approve"); c.post(f"/api/payments/{rid}/paypal-order"); return c,pp,rid
+def test_success_return_redirects_to_ui():
+    c,pp,rid=return_client(); response=c.get(f"/api/payments/{rid}/paypal-return",follow_redirects=False); assert response.status_code==303 and response.headers["location"]==f"/?request_id={rid}&payment=success" and pp.captures==1
+def test_error_return_redirects_to_ui():
+    c,pp,rid=return_client(FakePayPal(fail=True)); response=c.get(f"/api/payments/{rid}/paypal-return",follow_redirects=False); assert response.status_code==303 and response.headers["location"]==f"/?request_id={rid}&payment=error" and c.get(f"/api/payments/{rid}").json()["error_code"]=="INSTRUMENT_DECLINED"
+def test_completed_state_and_reconciliation_persist_after_return():
+    c,_,rid=return_client(); c.get(f"/api/payments/{rid}/paypal-return",follow_redirects=False); data=c.get(f"/api/payments/{rid}").json(); assert data["status"]=="SUCCEEDED" and data["paypal_status"]=="COMPLETED" and data["receipt"]["paypal_capture_id"]=="CAP-1" and data["reconciliation"]["result"]=="MATCH"
+def test_return_replay_does_not_recapture():
+    c,pp,rid=return_client(); c.get(f"/api/payments/{rid}/paypal-return",follow_redirects=False); second=c.get(f"/api/payments/{rid}/paypal-return",follow_redirects=False); assert second.headers["location"].endswith("payment=success") and pp.captures==1
+def test_json_state_endpoint_remains_available():
+    c,_,rid=return_client(); assert c.get(f"/api/payments/{rid}").headers["content-type"].startswith("application/json")
+def test_main_ui_contains_restore_banners():
+    c=TestClient(create_app(Settings(database_path=":memory:"),Store(":memory:"),FakePayPal(),FixtureInterpreter())); html=c.get("/").text; script=c.get("/static/app.js").text; assert 'id="payment-banner"' in html and "PayPal Sandbox payment completed successfully." in script and "No payment was captured." in script
 def test_approve_link(): assert approve_link({"links":[{"rel":"approve","href":"x"}]})=="x"
 def test_live_base_rejected():
     with pytest.raises(ValueError): Settings(paypal_base_url="https://api-m.paypal.com").validate()

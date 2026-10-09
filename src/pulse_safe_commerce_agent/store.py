@@ -22,6 +22,10 @@ class Store:
           decision TEXT NOT NULL,reason_code TEXT NOT NULL,created_at TEXT NOT NULL,
           PRIMARY KEY(request_id,stage));
         """)
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(payment_requests)")}
+        if "reconciliation_json" not in columns:
+            self.db.execute("ALTER TABLE payment_requests ADD COLUMN reconciliation_json TEXT")
+            self.db.commit()
 
     def create(self, row: dict) -> None:
         self.db.execute("INSERT INTO payment_requests(request_id,status,intent_json,intent_hash,idempotency_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
@@ -33,7 +37,7 @@ class Store:
         return dict(row) if row else None
 
     def update(self, request_id: str, **values) -> None:
-        allowed = {"status", "approval_hash", "approval_at", "paypal_order_id", "paypal_capture_id", "paypal_status", "error_code", "receipt_json", "updated_at"}
+        allowed = {"status", "approval_hash", "approval_at", "paypal_order_id", "paypal_capture_id", "paypal_status", "error_code", "receipt_json", "reconciliation_json", "updated_at"}
         if not values or not set(values) <= allowed:
             raise ValueError("Unsupported update")
         sql = ",".join(f"{k}=?" for k in values)
